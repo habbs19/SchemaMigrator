@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace SchemaMigrator.Core.Models
+namespace SchemaMigrator.Core.Models;
+
+public sealed class SchemaSnapshot
 {
-    internal class SchemaSnapshot
-    {
-    }
+    public Dictionary<string, TableDef> Tables { get; } = new(StringComparer.OrdinalIgnoreCase);
 }

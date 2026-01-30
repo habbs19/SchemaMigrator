@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using SchemaMigrator.Core.Models;
+namespace SchemaMigrator.Contracts;
 
-namespace SchemaMigrator.Contracts
+public interface ISchemaReader
 {
-    internal interface ISchemaReader
-    {
-    }
+    Task<SchemaSnapshot> ReadAsync();
 }

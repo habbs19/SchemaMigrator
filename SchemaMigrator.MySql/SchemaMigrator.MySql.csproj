@@ -6,4 +6,13 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="DataAccessProvider.MySql" Version="1.3.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SchemaMigrator.Contracts\SchemaMigrator.Contracts.csproj" />
+    <ProjectReference Include="..\SchemaMigrator.Core\SchemaMigrator.Core.csproj" />
+  </ItemGroup>
+
 </Project>

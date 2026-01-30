@@ -1,10 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿namespace SchemaMigrator.Core.Models;
 
-namespace SchemaMigrator.Core.Models
+public sealed class ForeignKeyDef
 {
-    internal class ForeignKeyDef
-    {
-    }
+    public required string Name { get; init; }
+    public required string Table { get; init; }
+    public required IReadOnlyList<string> Columns { get; init; }
+    public required string RefTable { get; init; }
+    public required IReadOnlyList<string> RefColumns { get; init; }
+    public required string OnDelete { get; init; }
+    public required string OnUpdate { get; init; }
 }
