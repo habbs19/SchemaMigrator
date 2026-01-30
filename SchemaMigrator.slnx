@@ -1,3 +1,6 @@
 <Solution>
+  <Project Path="SchemaMigrator.Contracts/SchemaMigrator.Contracts.csproj" />
+  <Project Path="SchemaMigrator.Core/SchemaMigrator.Core.csproj" />
+  <Project Path="SchemaMigrator.MySql/SchemaMigrator.MySql.csproj" />
   <Project Path="SchemaMigrator/SchemaMigrator.csproj" />
 </Solution>
