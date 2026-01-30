@@ -1,49 +1,54 @@
-﻿using SchemaMigrator.Core.Diff;
+using SchemaMigrator.Core.Diff;
 using SchemaMigrator.Core.Models;
 using SchemaMigrator.Core.Options;
 
 namespace SchemaMigrator.Core.Sql;
 
+/// <summary>
+/// Base class for database-specific SQL emitters.
+/// </summary>
 public abstract class SqlEmitterBase : ISqlEmitter
 {
     public SqlEmitResult Emit(
         DiffPlan plan,
-        SchemaSnapshot prod,
-        SchemaSnapshot dev,
+        SchemaSnapshot source,
+        SchemaSnapshot target,
         EmitOptions options)
     {
-        if (plan == null) throw new ArgumentNullException(nameof(plan));
-        if (prod == null) throw new ArgumentNullException(nameof(prod));
-        if (dev == null) throw new ArgumentNullException(nameof(dev));
-        if (options == null) throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(options);
 
         Validate(plan, options);
 
-        var prechecks = new List<string>();
-        var sql = new List<string>();
+        var context = new EmitContext(source, target, options);
 
-        if (options.UseTransaction)
-            sql.Add("START TRANSACTION;");
+        // Emit preparation phase
+        EmitPreparation(context);
 
+        // Emit each phase in order
         foreach (var phase in Enum.GetValues<SqlPhase>())
         {
-            EmitPhase(
-                phase,
-                plan,
-                prod,
-                dev,
-                options,
-                prechecks,
-                sql);
+            var ops = plan.Operations.Where(o => o.Phase == phase).ToList();
+            
+            foreach (var op in ops)
+            {
+                EmitOperation(op, context);
+            }
         }
 
-        if (options.UseTransaction)
-            sql.Add("COMMIT;");
+        // Emit cleanup phase
+        EmitCleanup(context);
 
         return new SqlEmitResult
         {
-            PrecheckSql = prechecks,
-            MigrationSql = sql
+            PrecheckSql = context.Prechecks,
+            MigrationSql = context.Sql,
+            RollbackSql = context.Rollback,
+            Warnings = context.Warnings,
+            IsComplete = context.SkippedOperations.Count == 0,
+            SkippedOperations = context.SkippedOperations
         };
     }
 
@@ -60,15 +65,58 @@ public abstract class SqlEmitterBase : ISqlEmitter
     }
 
     /// <summary>
-    /// Emit SQL for a specific phase.
-    /// Implemented by database-specific emitters (e.g., MySQL).
+    /// Emit preparation SQL (start transaction, disable FK checks, etc).
     /// </summary>
-    protected abstract void EmitPhase(
-        SqlPhase phase,
-        DiffPlan plan,
-        SchemaSnapshot prod,
-        SchemaSnapshot dev,
-        EmitOptions options,
-        List<string> prechecks,
-        List<string> sql);
+    protected abstract void EmitPreparation(EmitContext context);
+
+    /// <summary>
+    /// Emit cleanup SQL (commit, re-enable FK checks, etc).
+    /// </summary>
+    protected abstract void EmitCleanup(EmitContext context);
+
+    /// <summary>
+    /// Emit SQL for a single operation.
+    /// </summary>
+    protected abstract void EmitOperation(DiffOperation operation, EmitContext context);
+
+    /// <summary>
+    /// Context object carrying state through emission.
+    /// </summary>
+    protected sealed class EmitContext
+    {
+        public SchemaSnapshot Source { get; }
+        public SchemaSnapshot Target { get; }
+        public EmitOptions Options { get; }
+
+        private readonly List<string> _prechecks = new();
+        private readonly List<string> _sql = new();
+        private readonly List<string> _rollback = new();
+        private readonly List<string> _warnings = new();
+        private readonly List<DiffOperation> _skipped = new();
+
+        public IReadOnlyList<string> Prechecks => _prechecks;
+        public IReadOnlyList<string> Sql => _sql;
+        public IReadOnlyList<string> Rollback => _rollback;
+        public IReadOnlyList<string> Warnings => _warnings;
+        public IReadOnlyList<DiffOperation> SkippedOperations => _skipped;
+
+        public EmitContext(SchemaSnapshot source, SchemaSnapshot target, EmitOptions options)
+        {
+            Source = source;
+            Target = target;
+            Options = options;
+        }
+
+        public void AddPrecheck(string sql) => _prechecks.Add(sql);
+        public void AddSql(string sql) => _sql.Add(sql);
+        public void AddRollback(string sql) => _rollback.Insert(0, sql); // Reverse order
+        public void AddWarning(string warning) => _warnings.Add(warning);
+        public void Skip(DiffOperation op) => _skipped.Add(op);
+
+        public void AddComment(string comment)
+        {
+            if (Options.IncludeComments)
+                _sql.Add($"-- {comment}");
+        }
+    }
 }

@@ -1,10 +1,10 @@
-﻿using SchemaMigrator.Core.Models;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using SchemaMigrator.Core.Models;
 
 namespace SchemaMigrator.MySql.Normalization;
 
+/// <summary>
+/// Normalizes foreign key data from MySQL information_schema to consistent ForeignKeyDef format.
+/// </summary>
 public static class ForeignKeyNormalizer
 {
     public static IReadOnlyDictionary<string, ForeignKeyDef> Normalize(IEnumerable<ForeignKeyRow> rows)

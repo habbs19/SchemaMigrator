@@ -1,13 +1,13 @@
-﻿using SchemaMigrator.Core.Models;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using SchemaMigrator.Core.Models;
 
 namespace SchemaMigrator.MySql.Normalization;
 
+/// <summary>
+/// Normalizes column data from MySQL information_schema to consistent ColumnDef format.
+/// </summary>
 public static class ColumnNormalizer
 {
-    public static ColumnDef Normalize(Columns c)
+    public static ColumnDef Normalize(ColumnRow c)
     {
         return new ColumnDef
         {
@@ -17,7 +17,9 @@ public static class ColumnNormalizer
             Default = NormalizeDefault(c.COLUMN_DEFAULT),
             Extra = NormalizeExtra(c.EXTRA),
             Charset = c.CHARACTER_SET_NAME,
-            Collation = c.COLLATION_NAME
+            Collation = c.COLLATION_NAME,
+            Comment = string.IsNullOrWhiteSpace(c.COLUMN_COMMENT) ? null : c.COLUMN_COMMENT,
+            OrdinalPosition = c.ORDINAL_POSITION
         };
     }
 
@@ -42,6 +44,10 @@ public static class ColumnNormalizer
 
         var value = columnDefault.Trim();
 
+        // Empty string is still a valid default
+        if (value.Length == 0)
+            return "";
+
         // Normalize CURRENT_TIMESTAMP variants
         if (value.Equals("current_timestamp()", StringComparison.OrdinalIgnoreCase) ||
             value.Equals("current_timestamp", StringComparison.OrdinalIgnoreCase))
@@ -49,12 +55,30 @@ public static class ColumnNormalizer
             return "CURRENT_TIMESTAMP";
         }
 
-        // Strip surrounding quotes
-        if (value.Length >= 2 &&
-            value.StartsWith("'") &&
-            value.EndsWith("'"))
+        // Handle CURRENT_TIMESTAMP with precision
+        if (value.StartsWith("current_timestamp(", StringComparison.OrdinalIgnoreCase))
         {
-            return value.Substring(1, value.Length - 2);
+            return value.ToUpperInvariant();
+        }
+
+        // Normalize NOW() variant
+        if (value.Equals("now()", StringComparison.OrdinalIgnoreCase))
+        {
+            return "CURRENT_TIMESTAMP";
+        }
+
+        // Normalize UUID()
+        if (value.StartsWith("uuid(", StringComparison.OrdinalIgnoreCase))
+        {
+            return value.ToLowerInvariant();
+        }
+
+        // Strip surrounding single quotes for string literals
+        if (value.Length >= 2 &&
+            value.StartsWith('\'') &&
+            value.EndsWith('\''))
+        {
+            return value[1..^1];
         }
 
         return value;
@@ -65,7 +89,7 @@ public static class ColumnNormalizer
         if (string.IsNullOrWhiteSpace(extra))
             return string.Empty;
 
-        // Split into tokens, remove metadata-only flags
+        // Split into tokens, remove metadata-only flags that don't affect behavior
         var tokens = extra
             .Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(t => !t.Equals("DEFAULT_GENERATED", StringComparison.OrdinalIgnoreCase))
